@@ -1,5 +1,4 @@
-# Image-Recognition-Framework-based-on-Tensorflow-Keras
-Image Recognition Framework based on Tensorflow/Keras
+
 基于深度学习的图像识别框架
 包含2个核心文件（分别是main.py、models文件夹、getNinaProData.py）
 
