@@ -11,8 +11,9 @@ getNinaProData.py包含各种获取、整理、保存数据的函数。
 
 该项目用于sEMG表面肌电信号识别，但是框架是通用的，只要修改一下getNinaProData.py，就可以用于其他识别应用。
 
-本项目采用的数据是NinaPro DB2数据集，s1~s40，50个手势分类，3次实验。
-分别是Sx_Ey_A1.mat，其中x=1~40，y=1~3
+本项目采用的数据是NinaPro DB2数据集，s1~s40，50个手势分类，3次实验
+
+数据名称格式是Sx_Ey_A1.mat，其中x=1~40代表人的编号，y=1~3代表实验编号
 数据集下载链接（需要注册账号）：http://ninapro.hevs.ch/
 
 | index | train_acc | test_acc | network |
