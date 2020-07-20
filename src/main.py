@@ -16,9 +16,9 @@ from tensorflow.keras.callbacks import TensorBoard
 import time
 import os,pathlib
 from models.mobilenets import MobileNet
-from mobels.CNN import CNN
-
-#from multiCNN import multiCNN
+from models.CNN import CNN
+from models.multiCNN import multiCNN
+from models.CrossStitchNet import CrossStitchNet
 
 K.clear_session()
 tf.reset_default_graph()
@@ -69,12 +69,14 @@ class LossHistory(keras.callbacks.Callback):
 def myprint(s):
     with open('main.log','a') as f:
         print(s, file=f)
-         
+
+
+
         
 class ImRecognition():
     def __init__(self,istrain='train'):
-        self.epochs=20
-        self.batch_size=64
+        self.epochs=100
+        self.batch_size=16
         self.verbose=1
         self.classes = 49
         self.input_shape = (100, 120, 1)
@@ -92,13 +94,64 @@ class ImRecognition():
         self.logger.info("*********************************************************************")
         self.logger.info("*********************************************************************")
         
+
+        self.model = self.build_model()
+             
         if istrain=='train':
             self.logger.info("Train config setting ...")
             self.logger.info("epochs: "+str(self.epochs))
             self.logger.info("batch_size: "+str(self.batch_size))
             self.logger.info("verbose: "+str(self.verbose))
         
+            self.getData()
+            os.makedirs(self.checkpoint_dir)
+            self.logger.info("saving train_data: "+self.checkpoint_dir+'/traindata.h5')
+            file = h5py.File(self.checkpoint_dir+'/traindata.h5','w')  
+            file.create_dataset('trainx', data = self.X_train)  
+            file.create_dataset('trainy', data = self.Y_train)  
+            file.close() 
+            
+            self.logger.info("saving test_data: "+self.checkpoint_dir+'/testdata.h5')
+            file = h5py.File(self.checkpoint_dir+'/testdata.h5','w')  
+            file.create_dataset('testx', data = self.X_test)  
+            file.create_dataset('testy', data = self.Y_test)  
+            file.close()          
         
+    def build_model(self):
+        self.logger.info("build model ...")
+                
+#        model = CNN(input_shape = self.input_shape,classes = self.classes)
+#        model = multiCNN(input_shape = self.input_shape,classes = self.classes)
+        model = MobileNet(input_shape = self.input_shape,classes = self.classes,attention_module = 'cbam_block')
+#        model = CrossStitchNet(input_shape = self.input_shape,classes = self.classes)
+        model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+        model.summary()
+        model.summary(print_fn=myprint)
+        self.logger.info("\n")
+
+        # 创建一个history实例
+        self.history = LossHistory() 
+
+        # 创建一个tensorboard实例
+        model_name = "DB2-Conv2D-{0:%Y-%m-%dT%H-%M-%S/}".format(self.data_time)
+        self.log_dir='logs/{}'.format(model_name)
+        self.logger.info("log_dir: "+self.log_dir)
+        self.tensorboard = TensorBoard(log_dir=self.log_dir)
+
+        # 创建一个ModelCheckpoint实例
+        self.checkpoint_path = self.log_dir+"/cp-{epoch:04d}.ckpt"  #全路径
+        self.checkpoint_dir = os.path.dirname(self.checkpoint_path) #所在文件路径
+        self.logger.info("checkpoint_dir: "+self.checkpoint_dir)
+        # Create checkpoint callback
+        self.cp_callback = keras.callbacks.ModelCheckpoint(self.checkpoint_path,
+                                                      save_weights_only=True,
+                                                      verbose=1,
+                                                      period=5)# Save weights, every 5-epochs.
+        self.logger.info("\n")
+
+        return model
+    
+    def getData(self):
         self.logger.info("\n")
         self.logger.info("dataset load ...")
         self.logger.info("data_path: "+str(self.data_path))
@@ -111,10 +164,6 @@ class ImRecognition():
         file.close()
         imageData=imageData.reshape(-1,self.input_shape[0],self.input_shape[1])
         imageLabel=imageLabel.astype('int64')
-#        print("total Images shape: ",imageData.shape)       
-#        print("total Labels shape: ",len(imageLabel))  
-        self.logger.info("total Images shape: "+str(imageData.shape))       
-        self.logger.info("total Labels shape: "+str(len(imageLabel)))
         
         # 随机打乱数据和标签
         N = imageData.shape[0]
@@ -122,7 +171,7 @@ class ImRecognition():
         data  = imageData[index,:,:]
         label = imageLabel[index]
         
-
+    
         # 对数据升维,标签one-hot
         data  = np.expand_dims(data, axis=3)#(?, 200, 12)->(?, 200, 12, 1)
         label = convert_to_one_hot(label,self.classes).T
@@ -130,61 +179,21 @@ class ImRecognition():
         # 划分数据集
         N = data.shape[0]
         num_train = round(N*0.8)
+        
         self.X_train = data[0:num_train,:,:,:]
         self.Y_train = label[0:num_train,:]
         self.X_test  = data[num_train:N,:,:,:]
         self.Y_test  = label[num_train:N,:]
         
-#        print ("X_train shape: " + str(self.X_train.shape))
-#        print ("Y_train shape: " + str(self.Y_train.shape))
-#        print ("X_test shape: " + str(self.X_test.shape))
-#        print ("Y_test shape: " + str(self.Y_test.shape))
+        
         self.logger.info ("X_train shape: " + str(self.X_train.shape))
         self.logger.info ("Y_train shape: " + str(self.Y_train.shape))
         self.logger.info ("X_test shape: " + str(self.X_test.shape))
         self.logger.info ("Y_test shape: " + str(self.Y_test.shape))
-            
+        self.logger.info("total Images: "+str(self.X_train.shape[0]+self.X_test.shape[0])) 
         self.logger.info("dataset load done!")
         self.logger.info("\n")
         
-        self.logger.info("build model ...")
-        self.model = self.build_model()
-        self.logger.info("\n")
-        
-        if istrain=='train':
-            # 创建一个history实例
-            self.history = LossHistory() 
-            
-            # 创建一个tensorboard实例
-            model_name = "DB2-Conv2D-{0:%Y-%m-%dT%H-%M-%S/}".format(self.data_time)
-            self.log_dir='logs/{}'.format(model_name)
-            print("log_dir: ",self.log_dir)
-            self.logger.info("log_dir: "+self.log_dir)
-            self.tensorboard = TensorBoard(log_dir=self.log_dir)
-            
-            # 创建一个ModelCheckpoint实例
-            self.checkpoint_path = self.log_dir+"/cp-{epoch:04d}.ckpt"  #全路径
-            self.checkpoint_dir = os.path.dirname(self.checkpoint_path) #所在文件路径
-            print("checkpoint_dir: ",self.checkpoint_dir)
-            self.logger.info("checkpoint_dir: "+self.checkpoint_dir)
-            # Create checkpoint callback
-            self.cp_callback = keras.callbacks.ModelCheckpoint(self.checkpoint_path,
-                                                          save_weights_only=True,
-                                                          verbose=1,
-                                                          period=5)# Save weights, every 5-epochs.
-            self.logger.info("\n")
-       
-                
-        
-    def build_model(self):
-#        model = CNN(input_shape = self.input_shape,classes = self.classes)
-        model = MobileNet(input_shape = self.input_shape,classes = self.classes,attention_module = 'cbam_block')
-#        model = multiCNN(input_shape = self.input_shape,classes = self.classes)
-        model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
-        model.summary()
-        model.summary(print_fn=myprint)
-        return model
-    
         
     def visualize(self,log_dir):
         os.system('"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe" http://localhost:6006')
@@ -195,14 +204,21 @@ class ImRecognition():
         checkpoints = pathlib.Path(input_checkpoint_dir).glob("*.ckpt")
         checkpoints = sorted(checkpoints, key=lambda cp:cp.stat().st_mtime)
         checkpoints = [cp.with_suffix('') for cp in checkpoints]
-        #print(checkpoints)
         latest = str(checkpoints[-1])+'.ckpt'
-#        print("Restoring: ",latest)
         self.logger.info("Restoring: "+latest)
         
         self.model.load_weights(latest)
         
         self.logger.info("Restoring model done.\n")
+        file = h5py.File(input_checkpoint_dir+'/traindata.h5','r')
+        self.X_train = file['trainx'][:]
+        self.Y_train = file['trainy'][:] 
+        file.close()
+        
+        file = h5py.File(input_checkpoint_dir+'/testdata.h5','r')
+        self.X_test = file['testx'][:]
+        self.Y_test = file['testy'][:] 
+        file.close()
 
     def train(self): 
         self.model.fit(self.X_train, self.Y_train, 
@@ -210,19 +226,15 @@ class ImRecognition():
                        validation_data=(self.X_test, self.Y_test),
                        callbacks=[self.history,self.tensorboard,self.cp_callback])
         self.history.loss_plot('epoch')
-        preds_train = self.model.evaluate(self.X_train, self.Y_train)
-#        print("Train Loss = " + str(preds_train[0]))
-#        print("Train Accuracy = " + str(preds_train[1]))
-        self.logger.info("Train Loss = " + str(preds_train[0]))
-        self.logger.info("Train Accuracy = " + str(preds_train[1]))
-        
         self.test()
 
         
     def test(self):
+        preds_train = self.model.evaluate(self.X_train, self.Y_train)
+        self.logger.info("Train Loss = " + str(preds_train[0]))
+        self.logger.info("Train Accuracy = " + str(preds_train[1]))
+        
         preds_test  = self.model.evaluate(self.X_test, self.Y_test)
-#        print("Test Loss = " + str(preds_test[0]))
-#        print("Test Accuracy = " + str(preds_test[1]))
         self.logger.info("Test Loss = " + str(preds_test[0]))
         self.logger.info("Test Accuracy = " + str(preds_test[1]))
         
@@ -241,5 +253,5 @@ def mytest(input_checkpoint_dir):
 
 if __name__ == '__main__':
     mytrain()
-#    mytest("./logs/DB2-Conv2D-2020-07-19T16-40-14")
+#    mytest("./logs/DB2-Conv2D-2020-07-20T16-26-55")
   
