@@ -75,11 +75,11 @@ def myprint(s):
         
 class ImRecognition():
     def __init__(self,istrain='train'):
-        self.epochs=100
-        self.batch_size=16
+        self.epochs=20
+        self.batch_size=128
         self.verbose=1
         self.classes = 49
-        self.input_shape = (100, 120, 1)
+        self.input_shape = (200, 36, 1)
         self.data_time=datetime.now()
         self.data_path='../DB2/DB2_S1-1_norm_winlen200_slide200.h5'
         
@@ -123,6 +123,7 @@ class ImRecognition():
 #        model = CNN(input_shape = self.input_shape,classes = self.classes)
 #        model = multiCNN(input_shape = self.input_shape,classes = self.classes)
         model = MobileNet(input_shape = self.input_shape,classes = self.classes,attention_module = 'cbam_block')
+#        model = MobileNet(input_shape = self.input_shape,classes = self.classes)
 #        model = CrossStitchNet(input_shape = self.input_shape,classes = self.classes)
         model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
         model.summary()
@@ -162,7 +163,23 @@ class ImRecognition():
         imageData   = file['trainx'][:]
         imageLabel  = file['trainy'][:] 
         file.close()
-        imageData=imageData.reshape(-1,self.input_shape[0],self.input_shape[1])
+        repeat1=1
+        repeat2=1
+        if self.input_shape[0]*self.input_shape[1]!=(200*12):
+            
+            assert self.input_shape[0]/200>=1,'wrong input_shape[0]'
+            if self.input_shape[0]/200>=1:
+                repeat1=self.input_shape[0]/200
+                
+            assert self.input_shape[1]/12>=1,'wrong input_shape[1]'
+            if self.input_shape[1]/12>=1:
+                repeat2=self.input_shape[1]/12
+                
+            imageData=imageData.reshape(-1,int(self.input_shape[0]/repeat1),int(self.input_shape[1]/repeat2))
+        else:
+            imageData=imageData.reshape(-1,int(repeat1*self.input_shape[0]),int(repeat2*self.input_shape[1]))
+        
+        
         imageLabel=imageLabel.astype('int64')
         
         # 随机打乱数据和标签
@@ -174,6 +191,11 @@ class ImRecognition():
     
         # 对数据升维,标签one-hot
         data  = np.expand_dims(data, axis=3)#(?, 200, 12)->(?, 200, 12, 1)
+        if repeat1>1:
+            data = data.repeat(repeat1,axis=1)
+        if repeat2>1:
+            data = data.repeat(repeat2,axis=2)
+
         label = convert_to_one_hot(label,self.classes).T
         
         # 划分数据集
