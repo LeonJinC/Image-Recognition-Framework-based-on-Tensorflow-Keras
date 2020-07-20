@@ -17,7 +17,10 @@ getNinaProData.py包含各种获取、整理、保存数据的函数
 
 
 | index | train_acc | test_acc | network |
+| ----- | ----- | ----- | ----- |
 | 1      |  0.9803     |  0.9457    |  MobileNetv3_large|
+| ----- | ----- | ----- | ----- |
 | 2      |  0.9782     |  0.9344    |  MobileNetv1 |
+| ----- | ----- | ----- | ----- |
 | 3      |  0.9451     |  0.8284    |  ShuffleNetv2  |
    
